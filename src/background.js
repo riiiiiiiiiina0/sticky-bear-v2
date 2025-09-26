@@ -279,7 +279,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // Install header modification rules to allow most pages in iframes
   chrome.declarativeNetRequest
     .updateDynamicRules({
-      removeRuleIds: [1],
+      removeRuleIds: [1, 2],
       addRules: [
         {
           id: 1,
@@ -302,6 +302,24 @@ chrome.runtime.onInstalled.addListener(() => {
               {
                 header: 'Content-Security-Policy-Report-Only',
                 operation: 'remove',
+              },
+            ],
+          },
+        },
+        {
+          id: 2,
+          priority: 1,
+          condition: {
+            resourceTypes: ['sub_frame'],
+          },
+          action: {
+            type: 'modifyHeaders',
+            requestHeaders: [
+              {
+                header: 'user-agent',
+                operation: 'set',
+                value:
+                  'Mozilla/5.0 (iPhone; CPU iPhone OS 13_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.1 Mobile/15E148 Safari/604.1',
               },
             ],
           },
