@@ -4,6 +4,8 @@ class StickyNotesApp {
     this.notes = [];
     this.draggedNote = null;
     this.draggedIndex = -1;
+    // Placeholder element used during drag to preserve iframe content without re-parenting it repeatedly
+    this.dragPlaceholder = null;
     this.iframeMap = new Map();
     this.iframeResizeObservers = new Map();
     this.iframeResizeTimers = new Map();
@@ -16,6 +18,26 @@ class StickyNotesApp {
     ];
 
     this.init();
+  }
+
+  /**
+   * Apply flexbox order to note DOM elements based on current this.notes order.
+   */
+  refreshDomOrder() {
+    const container = /** @type {HTMLDivElement} */ (
+      document.getElementById('notes-container')
+    );
+    if (!container) return;
+    // Map noteId to order index
+    const idToIndex = new Map(this.notes.map((note, idx) => [note.id, idx]));
+    container.querySelectorAll('.sticky-note').forEach((el) => {
+      const id = /** @type {HTMLElement} */ (el).dataset.noteId;
+      if (!id) return;
+      const idx = idToIndex.get(id);
+      if (typeof idx === 'number') {
+        /** @type {HTMLElement} */ (el).style.order = String(idx);
+      }
+    });
   }
 
   async init() {
@@ -87,15 +109,38 @@ class StickyNotesApp {
       container.classList.remove('dragging-active');
       this.clearDragPreview();
 
-      if (this.draggedNote) {
-        const newIndex = Array.from(container.children).indexOf(
-          this.draggedNote,
-        );
+      if (this.draggedNote && this.dragPlaceholder) {
+        // Determine new index by counting sticky notes before placeholder, excluding the dragged note itself
+        let newIndex = 0;
+        let node = this.dragPlaceholder.previousElementSibling;
+        while (node) {
+          if (
+            node.classList.contains('sticky-note') &&
+            !node.classList.contains('drag-placeholder') &&
+            node !== this.draggedNote
+          ) {
+            newIndex += 1;
+          }
+          node = node.previousElementSibling;
+        }
+        // Remove the placeholder
+        this.dragPlaceholder.remove();
+        this.dragPlaceholder = null;
+        // Restore draggedNote visibility/layout BEFORE adjusting order so iframe not re-created
+        this.draggedNote.style.visibility = '';
+        this.draggedNote.style.position = '';
+        this.draggedNote.style.width = '';
+        this.draggedNote.style.height = '';
+        this.draggedNote.style.top = '';
+        this.draggedNote.style.left = '';
+        this.draggedNote.style.zIndex = '';
         if (newIndex !== this.draggedIndex) {
           // Reorder notes array
           const [movedNote] = this.notes.splice(this.draggedIndex, 1);
           this.notes.splice(newIndex, 0, movedNote);
           this.saveNotes();
+          // Update flexbox order without moving DOM nodes
+          this.refreshDomOrder();
         }
       }
     });
@@ -122,10 +167,14 @@ class StickyNotesApp {
     });
 
     // Move the dragged element
-    if (afterElement == null) {
-      container.appendChild(this.draggedNote);
-    } else {
-      container.insertBefore(this.draggedNote, afterElement);
+    if (this.dragPlaceholder) {
+      if (afterElement == null) {
+        container.appendChild(this.dragPlaceholder);
+      } else {
+        container.insertBefore(this.dragPlaceholder, afterElement);
+      }
+      // Ensure visual order matches DOM changes during drag
+      this.refreshDomOrder();
     }
   }
 
@@ -138,7 +187,9 @@ class StickyNotesApp {
 
   getDragAfterElement(container, y) {
     const draggableElements = [
-      ...container.querySelectorAll('.sticky-note:not(.dragging)'),
+      ...container.querySelectorAll(
+        '.sticky-note:not(.dragging):not(.drag-placeholder)',
+      ),
     ];
 
     return draggableElements.reduce(
@@ -309,6 +360,8 @@ class StickyNotesApp {
 
     // Add event listeners to the rendered notes
     this.attachNoteEventListeners();
+    // Ensure flexbox order matches note array order to avoid DOM re-parenting
+    this.refreshDomOrder();
   }
 
   renderNote(note) {
@@ -395,7 +448,29 @@ class StickyNotesApp {
 
       noteElement.addEventListener('dragstart', (e) => {
         this.draggedNote = noteElement;
-        this.draggedIndex = Array.from(container.children).indexOf(noteElement);
+        const noteId = noteElement.dataset.noteId;
+        this.draggedIndex = this.notes.findIndex((n) => n.id === noteId);
+
+        // Create and insert a placeholder to keep layout while the original note is hidden.
+        const rect = noteElement.getBoundingClientRect();
+        this.dragPlaceholder = document.createElement('div');
+        this.dragPlaceholder.className = 'sticky-note drag-placeholder';
+        this.dragPlaceholder.style.height = `${rect.height}px`;
+        if (noteElement.parentElement) {
+          noteElement.parentElement.insertBefore(
+            this.dragPlaceholder,
+            noteElement.nextSibling,
+          );
+        }
+
+        // Visually hide the original note while keeping it alive to preserve iframe state
+        noteElement.style.visibility = 'hidden';
+        noteElement.style.position = 'absolute';
+        noteElement.style.width = `${rect.width}px`;
+        noteElement.style.height = `${rect.height}px`;
+        noteElement.style.top = `${rect.top}px`;
+        noteElement.style.left = `${rect.left}px`;
+        noteElement.style.zIndex = '1000';
 
         // Add dragging class with a slight delay for smooth animation
         setTimeout(() => {
@@ -426,8 +501,23 @@ class StickyNotesApp {
         if (this.draggedNote) {
           // Smooth transition back to normal state
           this.draggedNote.classList.remove('dragging');
+          // Restore visibility and layout styles
+          this.draggedNote.style.visibility = '';
+          this.draggedNote.style.position = '';
+          this.draggedNote.style.width = '';
+          this.draggedNote.style.height = '';
+          this.draggedNote.style.top = '';
+          this.draggedNote.style.left = '';
+          this.draggedNote.style.zIndex = '';
           container.classList.remove('dragging-active');
           this.clearDragPreview();
+          // Remove placeholder if still present
+          if (this.dragPlaceholder && this.dragPlaceholder.parentElement) {
+            this.dragPlaceholder.parentElement.removeChild(
+              this.dragPlaceholder,
+            );
+          }
+          this.dragPlaceholder = null;
 
           // Reset drag state
           this.draggedNote = null;
@@ -623,8 +713,6 @@ class StickyNotesApp {
         'fullscreen; clipboard-read; clipboard-write',
       );
       iframe.name = `sbp-iframe-${note.id}`;
-      iframe.style.width = '100%';
-      iframe.style.height = '100%';
       iframe.style.border = '0';
       this.iframeMap.set(note.id, iframe);
       // Set src only when creating or if different
