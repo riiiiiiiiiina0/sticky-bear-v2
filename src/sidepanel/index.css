@@ -1,0 +1,345 @@
+/* Root variables for color schemes */
+:root {
+  --bg-primary: #f5f5f5;
+  --bg-secondary: #ffffff;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --border-color: #e0e0e0;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  --shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.15);
+  --accent-blue: #3b82f6;
+  --accent-red: #ef4444;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #0b0b0c;
+    --bg-secondary: #1a1a1b;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --border-color: #3f3f46;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    --shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  min-height: 100vh;
+  color: var(--text-primary);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: relative;
+}
+
+.header {
+  padding: 12px 16px;
+  text-align: center;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.bear-emoji {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+h1 {
+  color: var(--text-primary);
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.notes-container {
+  flex: 1;
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+/* Smooth animations for note reordering */
+.notes-container.dragging-active {
+  /* Enhanced visual feedback during drag operations */
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.notes-container.dragging-active .sticky-note:not(.dragging) {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 16px;
+  max-width: 220px;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.add-note-btn {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+  transition: all 0.2s ease;
+  z-index: 1000;
+  font-size: 12px;
+}
+
+.add-note-btn:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-hover);
+}
+
+.add-note-btn:active {
+  transform: scale(0.95);
+}
+
+/* Sticky Note Styles */
+.sticky-note {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  transform: translateY(0) rotate(0deg) scale(1);
+  flex-shrink: 0;
+}
+
+.sticky-note:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px) rotate(0deg) scale(1);
+}
+
+.sticky-note.dragging {
+  opacity: 0.9;
+  transform: translateY(-8px) rotate(3deg) scale(1.02);
+  z-index: 1000;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+  transition: opacity 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sticky-note.drag-over {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: var(--shadow-hover);
+}
+
+.sticky-note.drag-placeholder {
+  opacity: 0.3;
+  transform: scale(0.95);
+  border: 2px dashed var(--border-color);
+  background: transparent;
+}
+
+.note-header {
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  user-select: none;
+}
+
+.note-header:active {
+  cursor: grabbing;
+}
+
+.note-drag-handle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.note-drag-icon {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.note-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.color-picker {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.color-picker:hover {
+  transform: scale(1.1);
+}
+
+.delete-btn {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 12px;
+}
+
+.delete-btn:hover {
+  background: var(--accent-red);
+  color: white;
+}
+
+.note-content {
+  padding: 12px;
+}
+
+.note-textarea {
+  width: 100%;
+  min-height: 80px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
+  outline: none;
+}
+
+.note-textarea::placeholder {
+  color: var(--text-secondary);
+}
+
+.note-preview {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.note-preview h1,
+.note-preview h2,
+.note-preview h3,
+.note-preview h4,
+.note-preview h5,
+.note-preview h6 {
+  margin: 0 0 6px 0;
+  color: var(--text-primary);
+}
+
+.note-preview p {
+  margin: 0 0 6px 0;
+}
+
+.note-preview ul,
+.note-preview ol {
+  margin: 0 0 6px 12px;
+  padding: 0;
+}
+
+.note-preview code {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 1px 3px;
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.note-preview pre {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+
+.note-preview blockquote {
+  border-left: 2px solid var(--border-color);
+  margin: 6px 0;
+  padding: 0 8px;
+  color: var(--text-secondary);
+}
+
+/* Color themes for sticky notes */
+.note-theme-yellow {
+  background: rgb(211, 211, 23);
+}
+.note-theme-green {
+  background: #34d399;
+}
+.note-theme-blue {
+  background: #60a5fa;
+}
+.note-theme-red {
+  background: #f87171;
+}
+.note-theme-gray {
+  background: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  .note-theme-yellow {
+    background: #eeb31e;
+  }
+  .note-theme-green {
+    background: #059669;
+  }
+  .note-theme-blue {
+    background: #2563eb;
+  }
+  .note-theme-red {
+    background: #dc2626;
+  }
+  .note-theme-gray {
+    background: #6b7280;
+  }
+}
+
+/* Hide empty state when notes exist */
+.notes-container:not(:empty) ~ .empty-state {
+  display: none;
+}

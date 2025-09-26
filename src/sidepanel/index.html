@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sticky Bear Panel</title>
+  <link rel="stylesheet" href="index.css">
+</head>
+
+<body>
+  <div class="app">
+    <main class="notes-container" id="notes-container">
+      <!-- Sticky notes will be dynamically added here -->
+    </main>
+
+    <div class="empty-state" id="empty-state">
+      <p>No sticky notes yet. Click the + button or press Alt+N to add your first note!</p>
+    </div>
+
+    <button class="add-note-btn" id="add-note-btn" title="Add new note (Alt+N)">
+      ➕
+    </button>
+  </div>
+
+  <script src="../libs/marked@16.3.0.js"></script>
+  <script type="module" src="index.js"></script>
+</body>
+
+</html>
