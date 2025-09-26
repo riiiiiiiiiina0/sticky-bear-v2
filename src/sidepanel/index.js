@@ -1,11 +1,9 @@
 // Sticky Bear Panel - Main JavaScript
+import { HeroIcons } from './heroicons.js';
+
 class StickyNotesApp {
   constructor() {
     this.notes = [];
-    this.draggedNote = null;
-    this.draggedIndex = -1;
-    // Placeholder element used during drag to preserve iframe content without re-parenting it repeatedly
-    this.dragPlaceholder = null;
     this.iframeMap = new Map();
     this.iframeResizeObservers = new Map();
     this.iframeResizeTimers = new Map();
@@ -18,53 +16,6 @@ class StickyNotesApp {
     ];
 
     this.init();
-  }
-
-  /**
-   * Apply flexbox order to note DOM elements based on current this.notes order.
-   */
-  refreshDomOrder() {
-    const container = /** @type {HTMLDivElement} */ (
-      document.getElementById('notes-container')
-    );
-    if (!container) return;
-    // Map noteId to order index
-    const idToIndex = new Map(this.notes.map((note, idx) => [note.id, idx]));
-    container.querySelectorAll('.sticky-note').forEach((el) => {
-      const id = /** @type {HTMLElement} */ (el).dataset.noteId;
-      if (!id) return;
-      const idx = idToIndex.get(id);
-      if (typeof idx === 'number') {
-        /** @type {HTMLElement} */ (el).style.order = String(idx);
-      }
-    });
-  }
-
-  /**
-   * Clear any inline order styles so DOM order dictates layout.
-   */
-  clearDomOrderStyles() {
-    document.querySelectorAll('.sticky-note').forEach((el) => {
-      /** @type {HTMLElement} */ (el).style.order = '';
-    });
-  }
-
-  /**
-   * Ensure actual DOM children are in the same sequence as this.notes array.
-   */
-  syncDomWithNotes() {
-    const container = /** @type {HTMLDivElement} */ (
-      document.getElementById('notes-container')
-    );
-    if (!container) return;
-    this.notes.forEach((note) => {
-      const el = container.querySelector(
-        `.sticky-note[data-note-id="${note.id}"]`,
-      );
-      if (el && el.parentElement === container) {
-        container.appendChild(el); // append moves to end preserving order of iteration
-      }
-    });
   }
 
   async init() {
@@ -94,148 +45,25 @@ class StickyNotesApp {
         this.addNote();
       }
     });
-
-    // Handle drag and drop for reordering
-    this.setupDragAndDrop();
-  }
-
-  setupDragAndDrop() {
-    const container = /** @type {HTMLDivElement} */ (
-      document.getElementById('notes-container')
-    );
-
-    // Set up drag and drop event listeners on the container
-    container.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'move';
-      }
-
-      if (this.draggedNote) {
-        this.updateDragPreview(container, e.clientY);
-      }
-    });
-
-    container.addEventListener('dragenter', (e) => {
-      e.preventDefault();
-      if (this.draggedNote) {
-        container.classList.add('dragging-active');
-      }
-    });
-
-    container.addEventListener('dragleave', (e) => {
-      // Only remove dragging-active if we're leaving the container entirely
-      if (!container.contains(/** @type {Node} */ (e.relatedTarget))) {
-        container.classList.remove('dragging-active');
-        this.clearDragPreview();
-      }
-    });
-
-    container.addEventListener('drop', (e) => {
-      e.preventDefault();
-      container.classList.remove('dragging-active');
-      this.clearDragPreview();
-
-      if (this.draggedNote && this.dragPlaceholder) {
-        // Determine new index by counting sticky notes before placeholder, excluding the dragged note itself
-        let newIndex = 0;
-        let node = this.dragPlaceholder.previousElementSibling;
-        while (node) {
-          if (
-            node.classList.contains('sticky-note') &&
-            !node.classList.contains('drag-placeholder') &&
-            node !== this.draggedNote
-          ) {
-            newIndex += 1;
-          }
-          node = node.previousElementSibling;
-        }
-        // Remove the placeholder
-        this.dragPlaceholder.remove();
-        this.dragPlaceholder = null;
-        // Restore draggedNote visibility/layout BEFORE adjusting order so iframe not re-created
-        this.draggedNote.style.visibility = '';
-        this.draggedNote.style.position = '';
-        this.draggedNote.style.width = '';
-        this.draggedNote.style.height = '';
-        this.draggedNote.style.top = '';
-        this.draggedNote.style.left = '';
-        this.draggedNote.style.zIndex = '';
-        if (newIndex !== this.draggedIndex) {
-          // Reorder notes array
-          const [movedNote] = this.notes.splice(this.draggedIndex, 1);
-          this.notes.splice(newIndex, 0, movedNote);
-          this.saveNotes();
-          // Update flexbox order without moving DOM nodes
-          this.refreshDomOrder();
-        }
-      }
-    });
-  }
-
-  updateDragPreview(container, y) {
-    this.clearDragPreview();
-
-    const afterElement = this.getDragAfterElement(container, y);
-
-    // Add visual feedback to nearby elements
-    const allNotes = [
-      ...container.querySelectorAll('.sticky-note:not(.dragging)'),
-    ];
-    allNotes.forEach((note, index) => {
-      const noteElement = /** @type {HTMLElement} */ (note);
-      const rect = noteElement.getBoundingClientRect();
-      const distance = Math.abs(y - (rect.top + rect.height / 2));
-
-      if (distance < 100) {
-        // Within 100px
-        noteElement.classList.add('drag-over');
-      }
-    });
-
-    // Move the dragged element
-    if (this.dragPlaceholder) {
-      if (afterElement == null) {
-        container.appendChild(this.dragPlaceholder);
-      } else {
-        container.insertBefore(this.dragPlaceholder, afterElement);
-      }
-    }
-  }
-
-  clearDragPreview() {
-    // Remove drag-over class from all notes
-    document.querySelectorAll('.sticky-note').forEach((note) => {
-      note.classList.remove('drag-over');
-    });
-  }
-
-  getDragAfterElement(container, y) {
-    const draggableElements = [
-      ...container.querySelectorAll(
-        '.sticky-note:not(.dragging):not(.drag-placeholder)',
-      ),
-    ];
-
-    return draggableElements.reduce(
-      (closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
-        } else {
-          return closest;
-        }
-      },
-      { offset: Number.NEGATIVE_INFINITY },
-    ).element;
   }
 
   async loadNotes() {
     try {
       const result = await chrome.storage.sync.get(['stickyNotes']);
       this.notes = result.stickyNotes || [];
+
+      // Migrate existing notes to have order property
+      let needsSave = false;
+      this.notes.forEach((note, index) => {
+        if (typeof note.order !== 'number') {
+          note.order = index;
+          needsSave = true;
+        }
+      });
+
+      if (needsSave) {
+        await this.saveNotes();
+      }
     } catch (error) {
       console.error('Error loading notes:', error);
       this.notes = [];
@@ -261,7 +89,13 @@ class StickyNotesApp {
       isEditing: true,
       url: '',
       iframeHeight: undefined,
+      order: 0, // New notes get order 0 (top)
     };
+
+    // Increment order of existing notes
+    this.notes.forEach((note) => {
+      note.order = (note.order || 0) + 1;
+    });
 
     this.notes.unshift(newNote);
     this.saveNotes();
@@ -333,6 +167,58 @@ class StickyNotesApp {
     }
   }
 
+  moveNoteUp(noteId) {
+    const note = this.notes.find((n) => n.id === noteId);
+    if (!note) return;
+
+    // Find the note with the next lower order value (visually above)
+    const sortedNotes = this.notes
+      .filter((n) => n.order < note.order)
+      .sort((a, b) => b.order - a.order);
+
+    if (sortedNotes.length > 0) {
+      const targetNote = sortedNotes[0];
+      const tempOrder = note.order;
+      note.order = targetNote.order;
+      targetNote.order = tempOrder;
+
+      this.saveNotes();
+      this.updateNotesOrder();
+    }
+  }
+
+  moveNoteDown(noteId) {
+    const note = this.notes.find((n) => n.id === noteId);
+    if (!note) return;
+
+    // Find the note with the next higher order value (visually below)
+    const sortedNotes = this.notes
+      .filter((n) => n.order > note.order)
+      .sort((a, b) => a.order - b.order);
+
+    if (sortedNotes.length > 0) {
+      const targetNote = sortedNotes[0];
+      const tempOrder = note.order;
+      note.order = targetNote.order;
+      targetNote.order = tempOrder;
+
+      this.saveNotes();
+      this.updateNotesOrder();
+    }
+  }
+
+  updateNotesOrder() {
+    // Update the flex order of existing DOM elements instead of re-rendering
+    this.notes.forEach((note) => {
+      const noteElement = /** @type {HTMLElement | null} */ (
+        document.querySelector(`[data-note-id="${note.id}"]`)
+      );
+      if (noteElement) {
+        noteElement.style.order = note.order.toString();
+      }
+    });
+  }
+
   toggleNoteEdit(noteId) {
     const note = this.notes.find((note) => note.id === noteId);
     if (note) {
@@ -379,14 +265,16 @@ class StickyNotesApp {
 
     emptyState.style.display = 'none';
 
-    container.innerHTML = this.notes
+    // Sort notes by order for rendering
+    const sortedNotes = [...this.notes].sort(
+      (a, b) => (a.order || 0) - (b.order || 0),
+    );
+    container.innerHTML = sortedNotes
       .map((note) => this.renderNote(note))
       .join('');
 
     // Add event listeners to the rendered notes
     this.attachNoteEventListeners();
-    // Ensure flexbox order matches note array order to avoid DOM re-parenting
-    this.refreshDomOrder();
   }
 
   renderNote(note) {
@@ -396,23 +284,26 @@ class StickyNotesApp {
     return `
       <div class="sticky-note note-theme-${note.color}" data-note-id="${
       note.id
-    }" draggable="true">
+    }" style="order: ${note.order || 0}">
         <div class="note-header">
-          <div class="note-drag-handle">
-            <span class="note-drag-icon">☰</span>
-          </div>
-          <div class="note-controls">
+          <div class="note-controls-left">
             <div class="color-picker" data-color="${
               note.color
             }" title="Change color"></div>
+          </div>
+          <div class="note-controls-right">
+            <button class="move-btn move-up-btn" data-note-id="${
+              note.id
+            }" title="Move up">${HeroIcons.arrowUp}</button>
+            <button class="move-btn move-down-btn" data-note-id="${
+              note.id
+            }" title="Move down">${HeroIcons.arrowDown}</button>
             <button class="link-btn" data-note-id="${
               note.id
-            }" title="Set/clear webpage URL">🔗</button>
+            }" title="Set/clear webpage URL">${HeroIcons.link}</button>
             <button class="delete-btn" data-note-id="${
               note.id
-            }" title="Delete note">
-              🗑️
-            </button>
+            }" title="Delete note">${HeroIcons.trash}</button>
           </div>
         </div>
         <div class="note-content" data-note-id="${note.id}">
@@ -467,94 +358,6 @@ class StickyNotesApp {
       document.getElementById('notes-container')
     );
 
-    // Set up drag events for each note
-    document.querySelectorAll('.sticky-note').forEach((note) => {
-      const noteElement = /** @type {HTMLElement} */ (note);
-
-      noteElement.addEventListener('dragstart', (e) => {
-        this.draggedNote = noteElement;
-        const noteId = noteElement.dataset.noteId;
-        this.draggedIndex = this.notes.findIndex((n) => n.id === noteId);
-
-        // Sync DOM sequence to current notes order then remove order styles for accurate preview
-        this.syncDomWithNotes();
-        this.clearDomOrderStyles();
-
-        // Create and insert a placeholder to keep layout while the original note is hidden.
-        const rect = noteElement.getBoundingClientRect();
-        this.dragPlaceholder = document.createElement('div');
-        this.dragPlaceholder.className = 'sticky-note drag-placeholder';
-        this.dragPlaceholder.style.height = `${rect.height}px`;
-        if (noteElement.parentElement) {
-          noteElement.parentElement.insertBefore(
-            this.dragPlaceholder,
-            noteElement.nextSibling,
-          );
-        }
-
-        // Visually hide the original note while keeping it alive to preserve iframe state
-        noteElement.style.visibility = 'hidden';
-        noteElement.style.position = 'absolute';
-        noteElement.style.width = `${rect.width}px`;
-        noteElement.style.height = `${rect.height}px`;
-        noteElement.style.top = `${rect.top}px`;
-        noteElement.style.left = `${rect.left}px`;
-        noteElement.style.zIndex = '1000';
-
-        // Add dragging class with a slight delay for smooth animation
-        setTimeout(() => {
-          noteElement.classList.add('dragging');
-        }, 0);
-
-        if (e.dataTransfer) {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/html', noteElement.outerHTML);
-
-          // Create a custom drag image for better visual feedback
-          const dragImage = /** @type {HTMLElement} */ (
-            noteElement.cloneNode(true)
-          );
-          dragImage.style.transform = 'rotate(3deg) scale(1.02)';
-          dragImage.style.opacity = '0.9';
-          document.body.appendChild(dragImage);
-          e.dataTransfer.setDragImage(dragImage, e.offsetX, e.offsetY);
-
-          // Remove the temporary drag image after a short delay
-          setTimeout(() => {
-            document.body.removeChild(dragImage);
-          }, 0);
-        }
-      });
-
-      noteElement.addEventListener('dragend', (e) => {
-        if (this.draggedNote) {
-          // Smooth transition back to normal state
-          this.draggedNote.classList.remove('dragging');
-          // Restore visibility and layout styles
-          this.draggedNote.style.visibility = '';
-          this.draggedNote.style.position = '';
-          this.draggedNote.style.width = '';
-          this.draggedNote.style.height = '';
-          this.draggedNote.style.top = '';
-          this.draggedNote.style.left = '';
-          this.draggedNote.style.zIndex = '';
-          container.classList.remove('dragging-active');
-          this.clearDragPreview();
-          // Remove placeholder if still present
-          if (this.dragPlaceholder && this.dragPlaceholder.parentElement) {
-            this.dragPlaceholder.parentElement.removeChild(
-              this.dragPlaceholder,
-            );
-          }
-          this.dragPlaceholder = null;
-
-          // Reset drag state
-          this.draggedNote = null;
-          this.draggedIndex = -1;
-        }
-      });
-    });
-
     // Delete buttons
     document.querySelectorAll('.delete-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -569,6 +372,23 @@ class StickyNotesApp {
       picker.addEventListener('click', (e) => {
         e.stopPropagation();
         this.showColorPicker(picker);
+      });
+    });
+
+    // Move buttons
+    document.querySelectorAll('.move-up-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const noteId = /** @type {HTMLButtonElement} */ (btn).dataset.noteId;
+        this.moveNoteUp(noteId);
+      });
+    });
+
+    document.querySelectorAll('.move-down-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const noteId = /** @type {HTMLButtonElement} */ (btn).dataset.noteId;
+        this.moveNoteDown(noteId);
       });
     });
 
@@ -821,7 +641,7 @@ class StickyNotesApp {
     dropdown.style.cssText = `
       position: absolute;
       top: 100%;
-      right: 0;
+      left: 0;
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
       border-radius: 6px;
@@ -863,7 +683,7 @@ class StickyNotesApp {
 
     // Position dropdown relative to picker
     const pickerRect = pickerElement.getBoundingClientRect();
-    const noteControls = pickerElement.closest('.note-controls');
+    const noteControls = pickerElement.closest('.note-controls-left');
     noteControls.style.position = 'relative';
     noteControls.appendChild(dropdown);
 

@@ -74,15 +74,6 @@ h1 {
   position: relative;
 }
 
-/* Smooth animations for note reordering */
-.notes-container.dragging-active {
-  /* Enhanced visual feedback during drag operations */
-  background: rgba(0, 0, 0, 0.02);
-}
-
-.notes-container.dragging-active .sticky-note:not(.dragging) {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
 .empty-state {
   position: absolute;
@@ -147,25 +138,6 @@ h1 {
   transform: translateY(-2px) rotate(0deg) scale(1);
 }
 
-.sticky-note.dragging {
-  opacity: 0.9;
-  transform: translateY(-8px) rotate(3deg) scale(1.02);
-  z-index: 1000;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
-  transition: opacity 0.2s ease, box-shadow 0.2s ease;
-}
-
-.sticky-note.drag-over {
-  transform: translateY(-4px) scale(1.01);
-  box-shadow: var(--shadow-hover);
-}
-
-.sticky-note.drag-placeholder {
-  opacity: 0.3;
-  transform: scale(0.95);
-  border: 2px dashed var(--border-color);
-  background: transparent;
-}
 
 .note-header {
   padding: 4px 6px;
@@ -173,30 +145,11 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  cursor: grab;
   user-select: none;
 }
 
-.note-header:active {
-  cursor: grabbing;
-}
-
-.note-drag-handle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.note-drag-icon {
-  font-size: 12px;
-  opacity: 0.6;
-}
-
-.note-controls {
+.note-controls-left,
+.note-controls-right {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -205,6 +158,7 @@ h1 {
 .link-btn {
   width: 18px;
   height: 18px;
+  padding: 3px;
   border: none;
   background: none;
   color: var(--text-secondary);
@@ -222,11 +176,16 @@ h1 {
   color: var(--text-primary);
 }
 
+.link-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 .color-picker {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid var(--border-color);
+  border: 2px solid rgba(0, 0, 0, 0.2);
   cursor: pointer;
   transition: transform 0.2s ease;
 }
@@ -238,6 +197,7 @@ h1 {
 .delete-btn {
   width: 18px;
   height: 18px;
+  padding: 3px;
   border: none;
   background: none;
   color: var(--text-secondary);
@@ -253,6 +213,47 @@ h1 {
 .delete-btn:hover {
   background: var(--accent-red);
   color: white;
+}
+
+.delete-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.move-btn {
+  width: 18px;
+  height: 18px;
+  padding: 3px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 12px;
+}
+
+.move-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+}
+
+.move-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.move-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.move-btn:disabled:hover {
+  background: none;
+  color: var(--text-secondary);
 }
 
 .note-content {
@@ -282,10 +283,12 @@ h1 {
 }
 
 .iframe-container > iframe {
-  transform-origin: 0 0;
+  width: 100%;
+  height: 100%;
+  /* transform-origin: 0 0;
   transform: scale(0.75);
   width: calc(100% / 0.75);
-  height: calc(100% / 0.75);
+  height: calc(100% / 0.75); */
 }
 
 .note-textarea {
