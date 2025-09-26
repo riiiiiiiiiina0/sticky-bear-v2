@@ -92,10 +92,18 @@ h1 {
   line-height: 1.4;
 }
 
-.add-note-btn {
+.floating-buttons {
   position: fixed;
   bottom: 12px;
   right: 12px;
+  display: flex;
+  flex-direction: rows;
+  gap: 8px;
+  z-index: 1000;
+}
+
+.add-note-btn,
+.add-url-note-btn {
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -108,23 +116,34 @@ h1 {
   justify-content: center;
   box-shadow: var(--shadow);
   transition: all 0.2s ease;
-  z-index: 1000;
   font-size: 12px;
 }
 
-.add-note-btn:hover {
+.add-url-note-btn {
+  background: #10b981; /* Green for URL notes */
+}
+
+.add-note-btn:hover,
+.add-url-note-btn:hover {
   transform: scale(1.05);
   box-shadow: var(--shadow-hover);
 }
 
-.add-note-btn:active {
+.add-note-btn:active,
+.add-url-note-btn:active {
   transform: scale(0.95);
+}
+
+.add-note-btn svg,
+.add-url-note-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Sticky Note Styles */
 .sticky-note {
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: var(--shadow);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -267,12 +286,14 @@ h1 {
 .iframe-wrapper {
   position: relative;
   width: 100%;
+  height: 300px; /* Default height, will be overridden by inline styles when set */
   min-height: 200px;
   overflow: hidden;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  overflow: auto;
+  border: none;
+  border-radius: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
   resize: vertical;
 }
 
@@ -283,12 +304,12 @@ h1 {
 }
 
 .iframe-container > iframe {
-  width: 100%;
-  height: 100%;
-  /* transform-origin: 0 0;
+  /* width: 100%;
+  height: 100%; */
+  transform-origin: 0 0;
   transform: scale(0.75);
   width: calc(100% / 0.75);
-  height: calc(100% / 0.75); */
+  height: calc(100% / 0.75);
 }
 
 .note-textarea {

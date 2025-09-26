@@ -15,12 +15,18 @@
     </main>
 
     <div class="empty-state" id="empty-state">
-      <p>No sticky notes yet. Click the + button or press Alt+N to add your first note!</p>
+      <p>No sticky notes yet. Click the + button to add a note, the 🌐 button to add a note with URL, or press Alt+N!
+      </p>
     </div>
 
-    <button class="add-note-btn" id="add-note-btn" title="Add new note (Alt+N)">
-      ➕
-    </button>
+    <div class="floating-buttons">
+      <button class="add-note-btn" id="add-note-btn" title="Add new note (Alt+N)">
+        <!-- Plus icon will be added via JavaScript -->
+      </button>
+      <button class="add-url-note-btn" id="add-url-note-btn" title="Add note with URL (Alt+Shift+N)">
+        <!-- Globe icon will be added via JavaScript -->
+      </button>
+    </div>
   </div>
 
   <script src="../libs/marked@16.3.0.js"></script>
