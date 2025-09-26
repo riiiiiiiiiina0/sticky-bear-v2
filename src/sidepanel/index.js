@@ -7,6 +7,7 @@ class StickyNotesApp {
     this.iframeMap = new Map();
     this.iframeResizeObservers = new Map();
     this.iframeResizeTimers = new Map();
+    this.iframeData = {}; // Store iframe monitoring data
     this.colors = [
       'yellow', // default
       'green',
@@ -21,6 +22,9 @@ class StickyNotesApp {
   async init() {
     // Load notes from storage
     await this.loadNotes();
+
+    // Load iframe data from storage
+    await this.loadIframeData();
 
     // Set up event listeners
     this.setupEventListeners();
@@ -59,6 +63,8 @@ class StickyNotesApp {
         this.addNoteWithUrl();
       } else if (message.action === 'add-url-note-with-url') {
         this.addNoteWithUrl(message.url);
+      } else if (message.action === 'iframe-data-updated') {
+        this.handleIframeDataUpdate(message.noteId, message.data);
       }
     });
   }
@@ -97,6 +103,16 @@ class StickyNotesApp {
     } catch (error) {
       console.error('Error loading notes:', error);
       this.notes = [];
+    }
+  }
+
+  async loadIframeData() {
+    try {
+      const result = await chrome.storage.sync.get(['iframeData']);
+      this.iframeData = result.iframeData || {};
+    } catch (error) {
+      console.error('Error loading iframe data:', error);
+      this.iframeData = {};
     }
   }
 
@@ -365,9 +381,10 @@ class StickyNotesApp {
     if (actualNoteElement) {
       this.attachNoteEventListenersToElement(actualNoteElement);
 
-      // If note has a URL, mount its iframe
+      // If note has a URL, mount its iframe and update info
       if (note.url && note.url.length > 0) {
         this.mountIframeForNote(note);
+        this.updateIframeInfo(note.id);
       }
     }
   }
@@ -451,6 +468,13 @@ class StickyNotesApp {
               note.color
             }" title="Change color"></div>
           </div>
+          <div class="note-title-area" data-note-id="${note.id}">
+            ${
+              note.url && note.url.length > 0
+                ? `<span class="note-page-title" title="Page title">📄</span>`
+                : ''
+            }
+          </div>
           <div class="note-controls-right">
             <button class="move-btn move-up-btn" data-note-id="${
               note.id
@@ -527,6 +551,7 @@ class StickyNotesApp {
     this.notes.forEach((note) => {
       if (note.url && note.url.length > 0) {
         this.mountIframeForNote(note);
+        this.updateIframeInfo(note.id);
       }
     });
   }
@@ -617,6 +642,13 @@ class StickyNotesApp {
             }
           }
           this.saveNotes();
+
+          // Update the header to hide title area for non-URL notes
+          const headerElement = noteElement.querySelector('.note-header');
+          const titleArea = headerElement?.querySelector('.note-title-area');
+          if (titleArea) {
+            titleArea.innerHTML = '';
+          }
           return;
         }
         try {
@@ -650,8 +682,16 @@ class StickyNotesApp {
             note.id
           }"></div></div>`;
 
-          // Mount the iframe
+          // Mount the iframe and update info
           this.mountIframeForNote(note);
+          this.updateIframeInfo(note.id);
+        }
+
+        // Update the header to show title area for URL notes
+        const headerElement = noteElement.querySelector('.note-header');
+        const titleArea = headerElement?.querySelector('.note-title-area');
+        if (titleArea) {
+          titleArea.innerHTML = `<span class="note-page-title" title="Page title">📄</span>`;
         }
       });
     }
@@ -742,6 +782,104 @@ class StickyNotesApp {
   }
 
   /**
+   * Handle iframe data updates from the background script
+   * @param {string} noteId
+   * @param {object} data
+   */
+  handleIframeDataUpdate(noteId, data) {
+    this.iframeData[noteId] = data;
+    this.updateIframeInfo(noteId);
+  }
+
+  /**
+   * Update iframe title display in the note header
+   * @param {string} noteId
+   */
+  updateIframeInfo(noteId) {
+    const noteElement = document.querySelector(`[data-note-id="${noteId}"]`);
+    if (!noteElement) return;
+
+    const titleAreaElement = noteElement.querySelector('.note-title-area');
+    if (!titleAreaElement) return;
+
+    const data = this.iframeData[noteId];
+    if (!data) return;
+
+    const pageTitleElement = /** @type {HTMLElement | null} */ (
+      titleAreaElement.querySelector('.note-page-title')
+    );
+    if (!pageTitleElement) return;
+
+    // Update the title and tooltip
+    if (data.title) {
+      pageTitleElement.textContent = data.title;
+
+      // Create a comprehensive tooltip with all info
+      let tooltipText = `Page: ${data.title}`;
+      if (data.scrollY && data.scrollY > 0) {
+        tooltipText += `\nScroll: ${Math.round(data.scrollY)}px`;
+      }
+      if (data.lastUpdated) {
+        const lastUpdated = new Date(data.lastUpdated);
+        const now = new Date();
+        const diffMinutes = Math.floor(
+          (now.getTime() - lastUpdated.getTime()) / 60000,
+        );
+        if (diffMinutes < 60) {
+          const timeAgo =
+            diffMinutes === 0 ? 'Just now' : `${diffMinutes}m ago`;
+          tooltipText += `\nLast updated: ${timeAgo}`;
+        }
+      }
+
+      pageTitleElement.title = tooltipText;
+    } else {
+      pageTitleElement.textContent = '📄';
+      pageTitleElement.title = 'Page title';
+    }
+  }
+
+  /**
+   * Restore iframe state after loading
+   * @param {string} noteId
+   */
+  async restoreIframeState(noteId) {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'get-iframe-state',
+        noteId: noteId,
+      });
+
+      if (response && response.success && response.data) {
+        const iframe = this.iframeMap.get(noteId);
+        if (iframe && iframe.contentWindow) {
+          // Wait a bit for the iframe to load before trying to restore state
+          setTimeout(() => {
+            try {
+              chrome.runtime.sendMessage({
+                action: 'restore-iframe-state',
+                noteId: noteId,
+                scrollData: {
+                  scrollX: response.data.scrollX || 0,
+                  scrollY: response.data.scrollY || 0,
+                },
+              });
+            } catch (e) {
+              console.debug('Could not restore iframe state:', e);
+            }
+          }, 1000);
+        }
+
+        // Update local data and UI
+        this.iframeData[noteId] = response.data;
+        this.updateIframeInfo(noteId);
+      }
+    } catch (error) {
+      console.debug('Error restoring iframe state:', error);
+    }
+  }
+
+  /**
    * Ensure iframe for a note is created once and mounted into the container without reloading.
    * @param {{id:string,url:string}} note
    */
@@ -769,11 +907,25 @@ class StickyNotesApp {
       iframe.name = `sbp-iframe-${note.id}`;
       iframe.style.border = '0';
       this.iframeMap.set(note.id, iframe);
+
+      // Set up iframe load event to restore state
+      iframe.addEventListener('load', () => {
+        this.restoreIframeState(note.id);
+      });
+
       // Set src only when creating or if different
       iframe.src = note.url;
     } else {
       if (iframe.src !== note.url) {
         iframe.src = note.url;
+        // Restore state after navigation
+        iframe.addEventListener(
+          'load',
+          () => {
+            this.restoreIframeState(note.id);
+          },
+          { once: true },
+        );
       }
     }
     if (iframe.parentElement !== container) {

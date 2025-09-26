@@ -105,6 +105,105 @@ async function updateBadge() {
   }
 }
 
+// Function to handle iframe data updates from content scripts
+async function handleIframeDataUpdate(message) {
+  try {
+    const { noteId, url, data } = message;
+
+    // Get current notes from storage
+    const result = await chrome.storage.sync.get(['stickyNotes', 'iframeData']);
+    const notes = result.stickyNotes || [];
+    const iframeData = result.iframeData || {};
+
+    // Find the note that this iframe belongs to
+    const note = notes.find((n) => n.id === noteId);
+    if (!note) {
+      console.warn('Note not found for iframe data update:', noteId);
+      return;
+    }
+
+    // Ensure the iframe data object exists for this note
+    if (!iframeData[noteId]) {
+      iframeData[noteId] = {};
+    }
+
+    // Update iframe data based on the type of update
+    const noteIframeData = iframeData[noteId];
+
+    switch (data.type) {
+      case 'page-load':
+      case 'title-change':
+        noteIframeData.title = data.title;
+        noteIframeData.lastUrl = data.url;
+        noteIframeData.lastUpdated = data.timestamp;
+        break;
+
+      case 'scroll-change':
+        noteIframeData.scrollX = data.scrollX;
+        noteIframeData.scrollY = data.scrollY;
+        noteIframeData.lastScrollUpdate = data.timestamp;
+        break;
+
+      case 'url-change':
+        noteIframeData.lastUrl = data.url;
+        noteIframeData.title = data.title;
+        noteIframeData.lastUpdated = data.timestamp;
+        break;
+
+      case 'page-unload':
+        // Save final state on unload
+        noteIframeData.scrollX = data.scrollX;
+        noteIframeData.scrollY = data.scrollY;
+        noteIframeData.lastUrl = data.url;
+        noteIframeData.title = data.title;
+        noteIframeData.lastUpdated = data.timestamp;
+        break;
+    }
+
+    // Save updated iframe data
+    await chrome.storage.sync.set({ iframeData });
+
+    // Forward the update to the side panel if it's ready
+    if (sidePanelReady) {
+      chrome.runtime
+        .sendMessage({
+          action: 'iframe-data-updated',
+          noteId,
+          data: noteIframeData,
+        })
+        .catch(() => {
+          // Side panel might not be ready to receive the message
+        });
+    }
+  } catch (error) {
+    console.error('Error handling iframe data update:', error);
+  }
+}
+
+// Function to handle requests for iframe state restoration
+async function handleGetIframeState(message, sendResponse) {
+  try {
+    const { noteId } = message;
+
+    // Get iframe data from storage
+    const result = await chrome.storage.sync.get(['iframeData']);
+    const iframeData = result.iframeData || {};
+
+    const noteIframeData = iframeData[noteId] || {};
+
+    sendResponse({
+      success: true,
+      data: noteIframeData,
+    });
+  } catch (error) {
+    console.error('Error getting iframe state:', error);
+    sendResponse({
+      success: false,
+      error: error.message,
+    });
+  }
+}
+
 chrome.action.onClicked.addListener((tab) => {
   // Open the side panel when the action button is clicked
   chrome.sidePanel.open({ windowId: tab.windowId });
@@ -129,7 +228,7 @@ chrome.commands.onCommand.addListener((command, tab) => {
   }
 });
 
-// Handle messages from the side panel
+// Handle messages from the side panel and content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'update-badge') {
     updateBadge();
@@ -149,6 +248,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         pendingMessages.push(pendingMessage);
       });
     }
+  } else if (message.action === 'iframe-data-update') {
+    // Handle iframe data updates from content scripts
+    handleIframeDataUpdate(message);
+  } else if (message.action === 'get-iframe-state') {
+    // Handle requests for iframe state restoration
+    handleGetIframeState(message, sendResponse);
+    return true; // Keep the message channel open for async response
   }
 });
 

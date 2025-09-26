@@ -43,5 +43,17 @@
     "32": "icons/icon-32x32.png",
     "48": "icons/icon-48x48.png",
     "128": "icons/icon-128x128.png"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content-script.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
 }

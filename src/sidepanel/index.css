@@ -22,6 +22,15 @@
     --shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     --shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.4);
   }
+  
+  .note-page-title {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .note-page-title:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
 }
 
 * {
@@ -165,6 +174,7 @@ h1 {
   align-items: center;
   justify-content: space-between;
   user-select: none;
+  min-height: 26px;
 }
 
 .note-controls-left,
@@ -172,6 +182,35 @@ h1 {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.note-title-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  min-height: 18px;
+}
+
+.note-page-title {
+  font-size: 11px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 8px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.note-page-title:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.02);
 }
 
 .link-btn {
@@ -416,3 +455,4 @@ h1 {
 .notes-container:not(:empty) ~ .empty-state {
   display: none;
 }
+
