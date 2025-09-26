@@ -33,6 +33,9 @@ class StickyNotesApp {
 
     // Update badge on initialization
     chrome.runtime.sendMessage({ action: 'update-badge' });
+
+    // Signal that side panel is ready to receive messages
+    chrome.runtime.sendMessage({ action: 'sidepanel-ready' });
   }
 
   setupEventListeners() {
@@ -54,6 +57,8 @@ class StickyNotesApp {
         this.addNote();
       } else if (message.action === 'add-url-note') {
         this.addNoteWithUrl();
+      } else if (message.action === 'add-url-note-with-url') {
+        this.addNoteWithUrl(message.url);
       }
     });
   }
@@ -159,18 +164,24 @@ class StickyNotesApp {
     return urlInput;
   }
 
-  addNoteWithUrl() {
-    // Prompt for URL
-    const urlInput = this.askForUrl(
-      'Enter a webpage URL to create a sticky note for:',
-      '',
-    );
+  addNoteWithUrl(predefinedUrl = '') {
+    let urlInput = predefinedUrl;
 
-    if (urlInput === null) return; // User cancelled
+    // If no URL was provided, prompt for one
+    if (!urlInput) {
+      const promptResult = this.askForUrl(
+        'Enter a webpage URL to create a sticky note for:',
+        '',
+      );
 
-    if (urlInput === '') {
-      alert('Please enter a valid URL.');
-      return;
+      if (promptResult === null) return; // User cancelled
+
+      if (promptResult === '') {
+        alert('Please enter a valid URL.');
+        return;
+      }
+
+      urlInput = promptResult;
     }
 
     // Validate URL

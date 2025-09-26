@@ -8,7 +8,8 @@
     "storage",
     "declarativeNetRequest",
     "scripting",
-    "webNavigation"
+    "webNavigation",
+    "contextMenus"
   ],
   "host_permissions": [
     "<all_urls>"

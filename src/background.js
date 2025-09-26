@@ -1,5 +1,92 @@
 // Background script for Sticky Bear extension
 
+// Queue for pending messages to side panel
+let pendingMessages = [];
+let sidePanelReady = false;
+
+// Function to create context menus
+function createContextMenus() {
+  try {
+    // Remove any existing context menus first
+    chrome.contextMenus.removeAll();
+
+    // Context menu for pages
+    chrome.contextMenus.create({
+      id: 'sticky-bear-add-page',
+      title: 'Add page as sticky note',
+      contexts: ['page'],
+    });
+
+    // Context menu for links
+    chrome.contextMenus.create({
+      id: 'sticky-bear-add-link',
+      title: 'Add link as sticky note',
+      contexts: ['link'],
+    });
+  } catch (error) {
+    console.error('Error creating context menus:', error);
+  }
+}
+
+// Function to send message to side panel (with queuing if not ready)
+function sendToSidePanel(message) {
+  if (sidePanelReady) {
+    chrome.runtime.sendMessage(message).catch((error) => {
+      console.log('Side panel not ready, queuing message:', error);
+      pendingMessages.push(message);
+      sidePanelReady = false;
+    });
+  } else {
+    pendingMessages.push(message);
+  }
+}
+
+// Function to send message with timeout fallback
+function sendToSidePanelWithFallback(message) {
+  sendToSidePanel(message);
+
+  // Fallback: if message isn't processed within 500ms, try sending directly
+  // This handles the case where side panel is open but ready signal was missed
+  setTimeout(() => {
+    const messageIndex = pendingMessages.findIndex(
+      (msg) => msg.action === message.action && msg.url === message.url,
+    );
+
+    if (messageIndex !== -1) {
+      // Remove from pending queue and send directly
+      pendingMessages.splice(messageIndex, 1);
+      chrome.runtime.sendMessage(message).catch((error) => {
+        console.log('Fallback message send failed, re-queuing:', error);
+        // Put it back in queue if direct send fails
+        pendingMessages.push(message);
+      });
+    }
+  }, 500);
+}
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (!tab) return;
+
+  let url = '';
+  if (info.menuItemId === 'sticky-bear-add-page') {
+    url = info.pageUrl || tab.url || '';
+  } else if (info.menuItemId === 'sticky-bear-add-link') {
+    url = info.linkUrl || '';
+  }
+
+  if (url) {
+    // Open the side panel
+    chrome.sidePanel.open({ windowId: tab.windowId }).then(() => {
+      // Send the message with fallback for when panel is already open
+      sendToSidePanelWithFallback({
+        action: 'add-url-note-with-url',
+        url: url,
+      });
+    });
+  }
+});
+
 // Function to update the badge with the number of notes
 async function updateBadge() {
   try {
@@ -31,13 +118,13 @@ chrome.commands.onCommand.addListener((command, tab) => {
     // Open the side panel and send a message to add a new note
     chrome.sidePanel.open({ windowId: tab.windowId }).then(() => {
       // Send message to the side panel to add a new note
-      chrome.runtime.sendMessage({ action: 'add-note' });
+      sendToSidePanelWithFallback({ action: 'add-note' });
     });
   } else if (command === 'add-url-note') {
     // Open the side panel and send a message to add a new URL note
     chrome.sidePanel.open({ windowId: tab.windowId }).then(() => {
       // Send message to the side panel to add a new URL note
-      chrome.runtime.sendMessage({ action: 'add-url-note' });
+      sendToSidePanelWithFallback({ action: 'add-url-note' });
     });
   }
 });
@@ -46,6 +133,22 @@ chrome.commands.onCommand.addListener((command, tab) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'update-badge') {
     updateBadge();
+  } else if (message.action === 'sidepanel-ready') {
+    sidePanelReady = true;
+
+    // Send all pending messages
+    const messagesToSend = [...pendingMessages];
+    pendingMessages = [];
+
+    for (const pendingMessage of messagesToSend) {
+      chrome.runtime.sendMessage(pendingMessage).catch((error) => {
+        console.error('Error sending pending message:', error);
+        // If sending fails, the side panel might not be ready after all
+        sidePanelReady = false;
+        // Put the message back in the queue
+        pendingMessages.push(pendingMessage);
+      });
+    }
   }
 });
 
@@ -63,6 +166,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Initialize badge on installation
   updateBadge();
+
+  // Create context menus
+  createContextMenus();
 
   // Install header modification rules to allow most pages in iframes
   chrome.declarativeNetRequest
