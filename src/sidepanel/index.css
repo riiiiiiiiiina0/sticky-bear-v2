@@ -331,8 +331,7 @@ h1 {
   background: var(--bg-secondary);
   border: none;
   border-radius: 10px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   resize: vertical;
 }
 
