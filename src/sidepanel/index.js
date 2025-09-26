@@ -40,6 +40,33 @@ class StickyNotesApp {
     });
   }
 
+  /**
+   * Clear any inline order styles so DOM order dictates layout.
+   */
+  clearDomOrderStyles() {
+    document.querySelectorAll('.sticky-note').forEach((el) => {
+      /** @type {HTMLElement} */ (el).style.order = '';
+    });
+  }
+
+  /**
+   * Ensure actual DOM children are in the same sequence as this.notes array.
+   */
+  syncDomWithNotes() {
+    const container = /** @type {HTMLDivElement} */ (
+      document.getElementById('notes-container')
+    );
+    if (!container) return;
+    this.notes.forEach((note) => {
+      const el = container.querySelector(
+        `.sticky-note[data-note-id="${note.id}"]`,
+      );
+      if (el && el.parentElement === container) {
+        container.appendChild(el); // append moves to end preserving order of iteration
+      }
+    });
+  }
+
   async init() {
     // Load notes from storage
     await this.loadNotes();
@@ -173,8 +200,6 @@ class StickyNotesApp {
       } else {
         container.insertBefore(this.dragPlaceholder, afterElement);
       }
-      // Ensure visual order matches DOM changes during drag
-      this.refreshDomOrder();
     }
   }
 
@@ -450,6 +475,10 @@ class StickyNotesApp {
         this.draggedNote = noteElement;
         const noteId = noteElement.dataset.noteId;
         this.draggedIndex = this.notes.findIndex((n) => n.id === noteId);
+
+        // Sync DOM sequence to current notes order then remove order styles for accurate preview
+        this.syncDomWithNotes();
+        this.clearDomOrderStyles();
 
         // Create and insert a placeholder to keep layout while the original note is hidden.
         const rect = noteElement.getBoundingClientRect();
