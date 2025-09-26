@@ -19,6 +19,12 @@
         "default": "Alt+N"
       },
       "description": "Add a new sticky note"
+    },
+    "add-url-note": {
+      "suggested_key": {
+        "default": "Alt+Shift+N"
+      },
+      "description": "Add a new URL sticky note"
     }
   },
   "action": {

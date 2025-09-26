@@ -52,6 +52,8 @@ class StickyNotesApp {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.action === 'add-note') {
         this.addNote();
+      } else if (message.action === 'add-url-note') {
+        this.addNoteWithUrl();
       }
     });
   }

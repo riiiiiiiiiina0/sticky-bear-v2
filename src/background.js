@@ -33,6 +33,12 @@ chrome.commands.onCommand.addListener((command, tab) => {
       // Send message to the side panel to add a new note
       chrome.runtime.sendMessage({ action: 'add-note' });
     });
+  } else if (command === 'add-url-note') {
+    // Open the side panel and send a message to add a new URL note
+    chrome.sidePanel.open({ windowId: tab.windowId }).then(() => {
+      // Send message to the side panel to add a new URL note
+      chrome.runtime.sendMessage({ action: 'add-url-note' });
+    });
   }
 });
 
