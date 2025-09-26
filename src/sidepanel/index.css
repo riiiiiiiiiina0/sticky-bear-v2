@@ -202,6 +202,26 @@ h1 {
   gap: 6px;
 }
 
+.link-btn {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 12px;
+}
+
+.link-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+}
+
 .color-picker {
   width: 16px;
   height: 16px;
@@ -237,6 +257,24 @@ h1 {
 
 .note-content {
   padding: 12px;
+}
+
+.iframe-wrapper {
+  position: relative;
+  width: 100%;
+  min-height: 200px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: auto;
+  resize: vertical;
+}
+
+.iframe-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .note-textarea {

@@ -5,7 +5,13 @@
   "description": "A Chrome extension with a side panel",
   "permissions": [
     "sidePanel",
-    "storage"
+    "storage",
+    "declarativeNetRequest",
+    "scripting",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "commands": {
     "add-note": {

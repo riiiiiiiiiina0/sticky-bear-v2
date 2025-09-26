@@ -4,6 +4,9 @@ class StickyNotesApp {
     this.notes = [];
     this.draggedNote = null;
     this.draggedIndex = -1;
+    this.iframeMap = new Map();
+    this.iframeResizeObservers = new Map();
+    this.iframeResizeTimers = new Map();
     this.colors = [
       'yellow', // default
       'green',
@@ -180,6 +183,8 @@ class StickyNotesApp {
       color: 'yellow', // Default to yellow
       createdAt: new Date().toISOString(),
       isEditing: true,
+      url: '',
+      iframeHeight: undefined,
     };
 
     this.notes.unshift(newNote);
@@ -203,6 +208,26 @@ class StickyNotesApp {
   deleteNote(noteId) {
     const index = this.notes.findIndex((note) => note.id === noteId);
     if (index !== -1) {
+      // Clean up iframe if exists
+      const existing = this.iframeMap.get(noteId);
+      if (existing) {
+        try {
+          existing.remove();
+        } catch (_e) {}
+        this.iframeMap.delete(noteId);
+      }
+      const obs = this.iframeResizeObservers.get(noteId);
+      if (obs) {
+        try {
+          obs.disconnect();
+        } catch (_e) {}
+        this.iframeResizeObservers.delete(noteId);
+      }
+      const timer = this.iframeResizeTimers.get(noteId);
+      if (typeof timer === 'number') {
+        clearTimeout(timer);
+        this.iframeResizeTimers.delete(noteId);
+      }
       this.notes.splice(index, 1);
       this.saveNotes();
       this.renderNotes();
@@ -220,30 +245,44 @@ class StickyNotesApp {
   updateNoteColor(noteId, color) {
     const note = this.notes.find((note) => note.id === noteId);
     if (note) {
+      const previousColor = note.color;
       note.color = color;
       this.saveNotes();
-      this.renderNotes();
+      // Update DOM in place to avoid re-rendering iframe notes
+      const noteElement = document.querySelector(`[data-note-id="${noteId}"]`);
+      if (noteElement) {
+        noteElement.classList.remove(`note-theme-${previousColor}`);
+        noteElement.classList.add(`note-theme-${color}`);
+      }
     }
   }
 
   toggleNoteEdit(noteId) {
     const note = this.notes.find((note) => note.id === noteId);
     if (note) {
+      // Do not toggle edit mode if showing iframe
+      if (note.url && note.url.length > 0) return;
       note.isEditing = !note.isEditing;
-      this.renderNotes();
-
+      const contentElement = document.querySelector(
+        `.note-content[data-note-id="${noteId}"]`,
+      );
+      if (!contentElement) return;
       if (note.isEditing) {
-        setTimeout(() => {
-          const noteElement = document.querySelector(
-            `[data-note-id="${noteId}"]`,
-          );
-          const textarea = /** @type {HTMLTextAreaElement | null} */ (
-            noteElement?.querySelector('.note-textarea')
-          );
-          if (textarea) {
-            textarea.focus();
-          }
-        }, 100);
+        contentElement.innerHTML = `<textarea class="note-textarea" placeholder="Write your note here... (supports Markdown)" data-note-id="${
+          note.id
+        }">${note.content || ''}</textarea>`;
+        const textarea = /** @type {HTMLTextAreaElement | null} */ (
+          contentElement.querySelector('.note-textarea')
+        );
+        if (textarea) {
+          this.attachTextareaListenersFor(noteId, textarea);
+          // focus after microtask
+          setTimeout(() => textarea.focus(), 0);
+        }
+      } else {
+        contentElement.innerHTML = `<div class="note-preview">${this.renderMarkdown(
+          note.content || '',
+        )}</div>`;
       }
     }
   }
@@ -288,6 +327,9 @@ class StickyNotesApp {
             <div class="color-picker" data-color="${
               note.color
             }" title="Change color"></div>
+            <button class="link-btn" data-note-id="${
+              note.id
+            }" title="Set/clear webpage URL">🔗</button>
             <button class="delete-btn" data-note-id="${
               note.id
             }" title="Delete note">
@@ -297,7 +339,17 @@ class StickyNotesApp {
         </div>
         <div class="note-content" data-note-id="${note.id}">
           ${
-            isEditing
+            note.url && note.url.length > 0
+              ? `<div class="iframe-wrapper" data-resize-id="${
+                  note.id
+                }" style="${
+                  typeof note.iframeHeight === 'number'
+                    ? `height: ${note.iframeHeight}px;`
+                    : ''
+                }"><div class="iframe-container" data-iframe-container="${
+                  note.id
+                }"></div></div>`
+              : isEditing
               ? `<textarea class="note-textarea" placeholder="Write your note here... (supports Markdown)" data-note-id="${note.id}">${content}</textarea>`
               : `<div class="note-preview">${this.renderMarkdown(
                   content,
@@ -401,11 +453,68 @@ class StickyNotesApp {
       });
     });
 
+    // Link buttons
+    document.querySelectorAll('.link-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const noteId = /** @type {HTMLButtonElement} */ (btn).dataset.noteId;
+        const note = this.notes.find((n) => n.id === noteId);
+        if (!note) return;
+        const current = note.url || '';
+        const input = window.prompt(
+          'Enter webpage URL (leave blank to clear):',
+          current,
+        );
+        if (input === null) return; // cancelled
+        const trimmed = input.trim();
+        if (trimmed === '') {
+          note.url = '';
+          note.iframeHeight = undefined;
+          const obs = this.iframeResizeObservers.get(note.id);
+          if (obs) {
+            try {
+              obs.disconnect();
+            } catch (_e) {}
+            this.iframeResizeObservers.delete(note.id);
+          }
+          const timer = this.iframeResizeTimers.get(note.id);
+          if (typeof timer === 'number') {
+            clearTimeout(timer);
+            this.iframeResizeTimers.delete(note.id);
+          }
+          // keep content editing available
+          this.saveNotes();
+          this.renderNotes();
+          return;
+        }
+        try {
+          const u = new URL(trimmed);
+          if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+            alert('Only http/https URLs are supported.');
+            return;
+          }
+        } catch (_e) {
+          alert('Please enter a valid URL.');
+          return;
+        }
+        note.url = trimmed;
+        note.isEditing = false;
+        this.saveNotes();
+        this.renderNotes();
+      });
+    });
+
     // Note content areas (for toggling edit mode)
     document.querySelectorAll('.note-content').forEach((content) => {
       content.addEventListener('click', (e) => {
         const target = /** @type {HTMLElement} */ (e.target);
         const contentElement = /** @type {HTMLDivElement} */ (content);
+        const noteId = contentElement.dataset.noteId;
+        const note = this.notes.find((n) => n.id === noteId);
+        if (note && note.url && note.url.length > 0) {
+          // If showing webpage, do not toggle edit on click inside content
+          return;
+        }
 
         // Don't trigger edit mode if clicking on textarea
         if (target && target.classList.contains('note-textarea')) {
@@ -419,43 +528,168 @@ class StickyNotesApp {
             target.closest('.note-preview') ||
             target === contentElement)
         ) {
-          const noteId = contentElement.dataset.noteId;
           this.toggleNoteEdit(noteId);
         }
       });
     });
 
-    // Textareas
+    // Textareas (initial render only). New textareas will use attachTextareaListenersFor
     document.querySelectorAll('.note-textarea').forEach((textarea) => {
       const textareaElement = /** @type {HTMLTextAreaElement} */ (textarea);
-
-      // Auto-save on input
-      textareaElement.addEventListener('input', (e) => {
-        const noteId = textareaElement.dataset.noteId;
-        this.updateNoteContent(noteId, textareaElement.value);
-      });
-
-      // Exit edit mode on blur (with delay to allow for other interactions)
-      textareaElement.addEventListener('blur', (e) => {
-        setTimeout(() => {
-          const noteId = textareaElement.dataset.noteId;
-          const note = this.notes.find((n) => n.id === noteId);
-          if (note && note.isEditing) {
-            note.isEditing = false;
-            this.renderNotes();
-          }
-        }, 150);
-      });
-
-      // Handle keyboard shortcuts
-      textareaElement.addEventListener('keydown', (e) => {
-        const keyboardEvent = /** @type {KeyboardEvent} */ (e);
-        if (keyboardEvent.key === 'Escape') {
-          const noteId = textareaElement.dataset.noteId;
-          this.toggleNoteEdit(noteId);
-        }
-      });
+      const noteId = /** @type {string} */ (textareaElement.dataset.noteId);
+      this.attachTextareaListenersFor(noteId, textareaElement);
     });
+
+    // After wiring events, (re)mount iframes for notes with URLs
+    this.notes.forEach((note) => {
+      if (note.url && note.url.length > 0) {
+        this.mountIframeForNote(note);
+      }
+    });
+  }
+
+  /**
+   * Attach input/blur/keydown listeners to a specific textarea without full re-render.
+   * @param {string} noteId
+   * @param {HTMLTextAreaElement} textareaElement
+   */
+  attachTextareaListenersFor(noteId, textareaElement) {
+    // Auto-save on input
+    textareaElement.addEventListener('input', () => {
+      this.updateNoteContent(noteId, textareaElement.value);
+    });
+
+    // Exit edit mode on blur (with delay to allow for other interactions)
+    textareaElement.addEventListener('blur', () => {
+      setTimeout(() => {
+        const note = this.notes.find((n) => n.id === noteId);
+        if (note && note.isEditing) {
+          note.isEditing = false;
+          const contentElement = document.querySelector(
+            `.note-content[data-note-id="${noteId}"]`,
+          );
+          if (contentElement) {
+            contentElement.innerHTML = `<div class="note-preview">${this.renderMarkdown(
+              note.content || '',
+            )}</div>`;
+          }
+        }
+      }, 150);
+    });
+
+    // Handle keyboard shortcuts
+    textareaElement.addEventListener('keydown', (e) => {
+      const keyboardEvent = /** @type {KeyboardEvent} */ (e);
+      if (keyboardEvent.key === 'Escape') {
+        const note = this.notes.find((n) => n.id === noteId);
+        if (note) {
+          note.isEditing = false;
+          const contentElement = document.querySelector(
+            `.note-content[data-note-id="${noteId}"]`,
+          );
+          if (contentElement) {
+            contentElement.innerHTML = `<div class=\"note-preview\">${this.renderMarkdown(
+              note.content || '',
+            )}</div>`;
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * Ensure iframe for a note is created once and mounted into the container without reloading.
+   * @param {{id:string,url:string}} note
+   */
+  mountIframeForNote(note) {
+    const container = /** @type {HTMLDivElement|null} */ (
+      document.querySelector(
+        `.iframe-container[data-iframe-container="${note.id}"]`,
+      )
+    );
+    if (!container) return;
+
+    let iframe = this.iframeMap.get(note.id);
+    if (!iframe) {
+      iframe = /** @type {HTMLIFrameElement} */ (
+        document.createElement('iframe')
+      );
+      iframe.setAttribute(
+        'sandbox',
+        'allow-same-origin allow-scripts allow-forms allow-popups allow-downloads',
+      );
+      iframe.setAttribute(
+        'allow',
+        'fullscreen; clipboard-read; clipboard-write',
+      );
+      iframe.name = `sbp-iframe-${note.id}`;
+      iframe.style.width = '100%';
+      iframe.style.height = '100%';
+      iframe.style.border = '0';
+      this.iframeMap.set(note.id, iframe);
+      // Set src only when creating or if different
+      iframe.src = note.url;
+    } else {
+      if (iframe.src !== note.url) {
+        iframe.src = note.url;
+      }
+    }
+    if (iframe.parentElement !== container) {
+      try {
+        container.appendChild(iframe);
+      } catch (_e) {}
+    }
+
+    // Attach or refresh ResizeObserver on wrapper to remember height
+    const wrapper = /** @type {HTMLDivElement|null} */ (
+      container.closest('.iframe-wrapper')
+    );
+    if (!wrapper) return;
+
+    const existingObserver = this.iframeResizeObservers.get(note.id);
+    if (existingObserver) {
+      try {
+        existingObserver.disconnect();
+      } catch (_e) {}
+    }
+
+    const observer = new ResizeObserver(() => {
+      // Disable pointer events on iframe during resize to prevent mouse capture
+      const iframe = wrapper.querySelector('iframe');
+      if (iframe) {
+        iframe.style.pointerEvents = 'none';
+      }
+
+      const prevTimer = this.iframeResizeTimers.get(note.id);
+      if (typeof prevTimer === 'number') clearTimeout(prevTimer);
+      const timerId = /** @type {number} */ (
+        setTimeout(() => {
+          const currentWrapper = document.querySelector(
+            `.iframe-wrapper[data-resize-id="${note.id}"]`,
+          );
+          if (!currentWrapper) return;
+          const rect = currentWrapper.getBoundingClientRect();
+          const height = Math.max(0, Math.round(rect.height));
+          const n = this.notes.find((m) => m.id === note.id);
+          if (n && n.iframeHeight !== height) {
+            n.iframeHeight = height;
+            this.saveNotes();
+          }
+
+          // Re-enable pointer events on iframe after resize is done
+          const iframe = currentWrapper.querySelector('iframe');
+          if (iframe) {
+            iframe.style.pointerEvents = '';
+          }
+        }, 300)
+      );
+      this.iframeResizeTimers.set(note.id, timerId);
+    });
+
+    try {
+      observer.observe(wrapper);
+      this.iframeResizeObservers.set(note.id, observer);
+    } catch (_e) {}
   }
 
   showColorPicker(pickerElement) {

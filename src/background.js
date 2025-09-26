@@ -57,9 +57,93 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Initialize badge on installation
   updateBadge();
+
+  // Install header modification rules to allow most pages in iframes
+  chrome.declarativeNetRequest
+    .updateDynamicRules({
+      removeRuleIds: [1],
+      addRules: [
+        {
+          id: 1,
+          condition: {
+            urlFilter: '*',
+            resourceTypes: [
+              'sub_frame',
+              'xmlhttprequest',
+              'websocket',
+              'main_frame',
+              'other',
+            ],
+          },
+          action: {
+            type: 'modifyHeaders',
+            responseHeaders: [
+              { header: 'X-Frame-Options', operation: 'remove' },
+              { header: 'Frame-Options', operation: 'remove' },
+              { header: 'Content-Security-Policy', operation: 'remove' },
+              {
+                header: 'Content-Security-Policy-Report-Only',
+                operation: 'remove',
+              },
+            ],
+          },
+        },
+      ],
+    })
+    .catch((_e) => {});
 });
 
 // Update badge when extension starts up
 chrome.runtime.onStartup.addListener(() => {
   updateBadge();
 });
+
+// Inject small spoofing to reduce some blockers within frames
+const injectWindowSpoofing = async (tabId, frameId) => {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [frameId] },
+      world: 'MAIN',
+      injectImmediately: true,
+      // @ts-ignore args is supported
+      args: [chrome.runtime.id],
+      func: (extensionId) => {
+        try {
+          if (!window['__STICKY_BEAR_EXTENSION_ID']) {
+            Object.defineProperty(window, '__STICKY_BEAR_EXTENSION_ID', {
+              value: String(extensionId),
+              configurable: false,
+              enumerable: false,
+              writable: false,
+            });
+          }
+          const originalStop = window.stop;
+          const originalWrite = document.write;
+          window.stop = () => {};
+          document.write = (content) => {
+            if (content === '') return;
+            originalWrite(content);
+          };
+        } catch (_e) {}
+      },
+    });
+  } catch (_e) {}
+};
+
+chrome.webNavigation.onCommitted.addListener(
+  (details) => {
+    if (details.frameId >= 0) {
+      injectWindowSpoofing(details.tabId, details.frameId);
+    }
+  },
+  { url: [{ schemes: ['http', 'https'] }] },
+);
+
+chrome.webNavigation.onBeforeNavigate.addListener(
+  (details) => {
+    if (details.frameId >= 0) {
+      injectWindowSpoofing(details.tabId, details.frameId);
+    }
+  },
+  { url: [{ schemes: ['http', 'https'] }] },
+);
